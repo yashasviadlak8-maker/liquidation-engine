@@ -6,3 +6,4 @@ paper/*.aux
 paper/*.log
 paper/*.pdf
 .env
+.env
