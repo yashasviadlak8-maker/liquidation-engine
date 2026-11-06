@@ -1,0 +1,74 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\title{Tax-Optimal Withdrawals Under FIFO Lot Accounting:\\ An Exact Optimisation Approach for Indian Listed Equity}
+\author{Yashasvi Adlak}
+\date{}
+\begin{document}
+\maketitle
+
+\begin{abstract}
+% TODO write last. Problem, method (MILP), main result (tax saved vs baselines), LLM comparison.
+\end{abstract}
+
+\section{Introduction}
+% TODO: why withdrawals trigger avoidable tax; why retail tools (broker P\&L) only report, not plan;
+% why FIFO changes the problem; contributions (3 bullets).
+
+\section{Legal Model}
+% TODO cite primary sources. Holding period (more than 12 months), rates, exemption,
+% set-off rules, FIFO per demat account (s.45(2A), 1961 Act; new Act section TBD).
+
+\section{Problem Formulation}
+A \emph{position} $p$ is one scrip in one demat account with price $P_p$ and FIFO-ordered lots $j=1,\dots,n_p$
+with quantity $q_{pj}$ and unit cost $c_{pj}$. The decision is the integer quantity $x_p \in \{0,\dots,Q_p\}$ sold,
+where $Q_p=\sum_j q_{pj}$. FIFO fixes the consumed quantity $y_{pj}(x_p)$ of each lot, so lot choice is not a variable.
+
+Realised gains: $G^{ST}=\sum_{p,j\in S}(P_p-c_{pj})y_{pj}$ and $G^{LT}=\sum_{p,j\in L}(P_p-c_{pj})y_{pj}$,
+where a lot is long-term iff held more than 12 months at the sale date. Adding gains already realised this year,
+a net short-term loss offsets long-term gains but a net long-term loss does not offset short-term gains:
+\[
+T(G^{ST},G^{LT}) = (1+\kappa)\Big(\tau_s \max(\tilde G^{ST},0) + \tau_l \max(\max(\tilde G^{LT},0)-E,\,0)\Big),
+\]
+with $\tilde G^{LT}=G^{LT}+\min(G^{ST},0)$ when $G^{ST}<0$ and $G^{LT}>0$ (and $\tilde G^{LT}=G^{LT}$ otherwise),
+$\tilde G^{ST}=\max(G^{ST},0)$, rates $\tau_s=0.20$, $\tau_l=0.125$, cess $\kappa=0.04$, exemption $E=\text{Rs }125{,}000$.
+
+\textbf{Problem.} $\min_x\; T(G^{ST}(x),G^{LT}(x))$ subject to $\sum_p P_p x_p \ge W$, $x_p\in\{0,\dots,Q_p\}$.
+
+\section{Method}
+We solve the problem exactly with CP-SAT over integer paise. For each position, lots are ordered by purchase date and the
+variable $y_{pj}\in[0,q_{pj}]$ is the quantity taken from lot $j$. A binary $z_{pj}$ marks lot $j$ as fully consumed, with
+$y_{pj}\ge q_{pj}z_{pj}$ and $y_{p,j+1}\le q_{p,j+1}z_{pj}$, which enforces FIFO order. Gains are linear in $y$.
+The tax function is encoded with min/max equalities: $u=\min(\max(-\tilde G^{ST},0),\max(\tilde G^{LT},0))$ for the
+short-term-loss set-off, further brought-forward set-offs, $\min$ for the exemption, and a pair of linear inequalities
+that reproduce round-half-up to the paisa. Because a single weighted objective overflows 64-bit integers on large
+portfolios, we solve lexicographically in two stages: minimise tax, then fix it and minimise proceeds.
+Correctness is validated against exhaustive search (80 random instances with random year-to-date gains and
+brought-forward losses; identical tax and proceeds on all).
+
+\section{Baselines}
+\textbf{Pro-rata:} sell the same fraction of every position (floor of the target, then top up the largest deficits).
+\textbf{Largest-first:} empty the biggest positions until the target is met.
+\textbf{Greedy tax-aware:} repeatedly sell the chunk with the lowest marginal tax per rupee, evaluated through the full FIFO and tax model; strong but not guaranteed optimal.
+\textbf{Exhaustive optimum:} enumerate every feasible quantity vector (small instances only); ground truth for the exact solver.
+% TODO LLM-generated plans (later).
+
+\section{Experiments and Results}
+\textbf{Instances.} Synthetic, seeded, deliberately hard: gains-heavy portfolios (cost 0.3--1.15 of price), 40\% of lots acquired
+10--14 months before sale (near the long-term boundary), plus random year-to-date gains and brought-forward losses.
+Withdrawals are 20--50\% of portfolio value. Sizes: 15, 48 and 100 lots (100, 40 and 15 instances).
+\textbf{Validation.} On 80 small random instances the solver matches exhaustive search exactly (tax and proceeds); on the
+hard instances no baseline ever beat it and a single-worker re-solve agreed on 25 of 25 checked instances.
+\textbf{Results.} Table~\ref{tab:main} reports mean excess tax over the solver's optimum.
+\begin{table}[h]\centering\input{results_table.tex}\caption{Baselines versus the exact solver on hard synthetic instances.}\label{tab:main}\end{table}
+The solver proved optimality in every instance (mean 0.02--0.15\,s). The greedy heuristic was suboptimal in 87--93\% of instances,
+pro-rata and largest-first in 96--100\%. \emph{Caveat:} greedy here is our own marginal-tax heuristic with coarse chunking;
+a stronger rule-based practitioner baseline should be added before claiming general superiority.
+% TODO LLM comparison: zero-shot, CoT, code interpreter, solver-as-tool.
+
+\section{Limitations}
+Single financial year; listed equity only; no surcharge, brokerage or STT; prices treated as known; synthetic instances only
+(no real client portfolios yet); several rule parameters pending primary-source verification; ingestion ignores corporate actions.
+
+\section{Conclusion}
+\end{document}

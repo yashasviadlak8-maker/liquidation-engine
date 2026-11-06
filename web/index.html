@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Withdrawal planner</title>
+<style>
+:root{--bg:#f4f7f6;--surf:#fff;--ink:#12201c;--mute:#5d6e68;--line:#d9e2df;--acc:#0e6b5b;--accbg:#dcefe9;--loss:#b3372f;--gain:#1b7a4a;--warn:#fff4d6;--warnt:#6b4e00}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1614;--surf:#16211e;--ink:#e6efec;--mute:#93a69f;--line:#27372f;--acc:#4fc3a8;--accbg:#173a32;--loss:#ef7a70;--gain:#5ccf97;--warn:#3a2f10;--warnt:#f2d98a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums}
+main{max-width:1100px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:16px;margin:0 0 10px}
+.sub{color:var(--mute);margin:0 0 18px}
+.card{background:var(--surf);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:end}
+label{display:flex;flex-direction:column;font-size:13px;color:var(--mute);gap:3px}
+input,textarea,button{font:inherit;color:var(--ink)}
+input,textarea{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+input[type=number]{width:130px}textarea{width:100%;min-height:70px}
+button{background:var(--acc);color:#fff;border:0;border-radius:6px;padding:8px 14px;cursor:pointer;font-weight:600}
+button.alt{background:var(--accbg);color:var(--acc)}
+button:disabled{opacity:.5}
+.wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{text-align:right;padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}th{color:var(--mute);font-weight:600}
+td input{width:110px;padding:3px 6px}.lot{color:var(--mute);font-size:12.5px}
+.neg{color:var(--loss)}.pos{color:var(--gain)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:12px}
+.stat{background:var(--bg);border-radius:8px;padding:10px 12px}.stat b{display:block;font-size:22px}
+.stat span{color:var(--mute);font-size:13px}
+.bar{display:grid;grid-template-columns:130px 1fr 90px;gap:10px;align-items:center;margin:6px 0;font-size:13.5px}
+.bar div{height:14px;background:var(--bg);border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--mute)}
+.bar.o i{background:var(--acc)}
+.msg{padding:8px 12px;border-radius:8px;margin:8px 0;font-size:13.5px;background:var(--warn);color:var(--warnt)}
+.ok{background:var(--accbg);color:var(--acc)}
+.note{color:var(--mute);font-size:12.5px;margin-top:10px}
+</style>
+</head>
+<body>
+<main>
+<h1>Withdrawal planner</h1>
+<p class="sub">Load your holdings, say how much cash you need, and get the sell plan with the lowest capital-gains tax. Shares are sold oldest-first per scrip, as the law requires.</p>
+
+<section class="card">
+<h2>1. Portfolio</h2>
+<div class="row"><button id="sample" class="alt">Load sample portfolio</button>
+<span class="sub" style="margin:0">or paste a tradebook CSV (symbol, trade_date, trade_type, quantity, price):</span></div>
+<textarea id="csv" placeholder="symbol,trade_date,trade_type,quantity,price"></textarea>
+<div class="row" style="margin-top:8px"><button id="imp" class="alt">Import tradebook</button></div>
+<div id="issues"></div>
+<div class="wrap"><table id="pos"></table></div>
+</section>
+
+<section class="card">
+<h2>2. Request</h2>
+<div class="row">
+<label>Describe it (optional)<input id="txt" style="width:420px" placeholder="I need 2.5 lakh, don't touch Federal Bank, max 4 trades"></label>
+<button id="parse" class="alt">Parse</button></div>
+<div id="confirm"></div>
+<div class="row" style="margin-top:10px">
+<label>Cash needed (₹)<input id="amt" type="number" value="250000" min="0"></label>
+<label>Sale date<input id="date" type="date" value="2026-11-05"></label>
+<label>Max positions sold<input id="maxp" type="number" min="1" placeholder="any"></label></div>
+<details style="margin-top:10px"><summary>This year so far (₹)</summary><div class="row" style="margin-top:8px">
+<label>Short-term gain realised<input id="yst" type="number" value="0"></label>
+<label>Long-term gain realised<input id="ylt" type="number" value="0"></label>
+<label>Brought-forward ST loss<input id="bst" type="number" value="0" min="0"></label>
+<label>Brought-forward LT loss<input id="blt" type="number" value="0" min="0"></label></div></details>
+<div style="margin-top:12px"><button id="go">Confirm and plan</button></div>
+<div id="err"></div>
+</section>
+
+<section class="card" id="res" hidden>
+<h2>3. Plan</h2><div id="out"></div>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const inr=x=>(x<0?'−':'')+'₹'+Math.abs(Math.round(x)).toLocaleString('en-IN');
+const cls=x=>x<0?'neg':x>0?'pos':'';
+let P=[],skip=new Set();
+async function api(path,body){
+  const r=await fetch(path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+  const d=await r.json();
+  if(!r.ok)throw new Error(typeof d.detail==='string'?d.detail:'Please check the inputs.');
+  return d;
+}
+function msg(id,items,ok){$(id).innerHTML=items.map(t=>`<div class="msg ${ok?'ok':''}">${esc(t)}</div>`).join('')}
+function drawPos(){
+  $('pos').innerHTML='<tr><th>Scrip</th><th>Price (₹)</th><th>Lots (buy date · qty · cost)</th><th>Do not sell</th></tr>'+
+  P.map((p,i)=>`<tr><td>${esc(p.symbol)}</td><td><input type="number" step="0.05" value="${p.price}" data-p="${i}"></td>
+  <td style="text-align:left">${p.lots.map((l,j)=>`<div class="lot"><input type="date" value="${l.buy_date}" data-d="${i}.${j}"> · ${l.qty} · ₹${l.unit_cost}</div>`).join('')}</td>
+  <td><input type="checkbox" data-x="${esc(p.symbol)}" ${skip.has(p.symbol)?'checked':''}></td></tr>`).join('');
+  document.querySelectorAll('[data-p]').forEach(e=>e.onchange=()=>P[+e.dataset.p].price=+e.value);
+  document.querySelectorAll('[data-d]').forEach(e=>e.onchange=()=>{const[a,b]=e.dataset.d.split('.');P[+a].lots[+b].buy_date=e.value});
+  document.querySelectorAll('[data-x]').forEach(e=>e.onchange=()=>e.checked?skip.add(e.dataset.x):skip.delete(e.dataset.x));
+}
+$('sample').onclick=async()=>{const d=await api('/api/sample');P=d.positions;skip.clear();drawPos();msg('issues',[d.note])};
+$('imp').onclick=async()=>{try{const d=await api('/api/ingest',{csv_text:$('csv').value});P=d.positions;skip.clear();drawPos();msg('issues',d.issues.length?d.issues:['Imported without issues.'],!d.issues.length)}catch(e){msg('issues',[e.message])}};
+$('parse').onclick=async()=>{
+  try{const d=await api('/api/parse-request',{text:$('txt').value,symbols:P.map(p=>p.symbol)});
+  const c=d.constraints;if(c.amount_rupees)$('amt').value=c.amount_rupees;
+  skip=new Set(c.exclude);$('maxp').value=c.max_positions||'';drawPos();
+  msg('confirm',[d.confirm+' Check the fields, then press “Confirm and plan”.',...d.warnings],true)}catch(e){msg('confirm',[e.message])}};
+$('go').onclick=async()=>{
+  $('err').innerHTML='';$('go').disabled=true;
+  try{
+    const body={positions:P,amount:+$('amt').value,sale_date:$('date').value,exclude:[...skip],
+      max_positions:$('maxp').value?+$('maxp').value:null,
+      profile:{ytd_st:+$('yst').value,ytd_lt:+$('ylt').value,bf_st_loss:+$('bst').value,bf_lt_loss:+$('blt').value}};
+    show(await api('/api/plan',body));
+  }catch(e){msg('err',[e.message])}finally{$('go').disabled=false}
+};
+function show(d){
+  $('res').hidden=false;
+  const bl=Object.entries(d.baselines),mx=Math.max(d.tax,...bl.map(([,b])=>b.tax),1);
+  const names={pro_rata:'Pro-rata',largest_first:'Largest first',greedy:'Greedy heuristic'};
+  $('out').innerHTML=`<div class="stats"><div class="stat"><span>Cash raised</span><b>${inr(d.proceeds)}</b></div>
+  <div class="stat"><span>Tax on this sale</span><b>${inr(d.tax)}</b></div>
+  <div class="stat"><span>Saved vs pro-rata</span><b>${inr(d.savings_vs_pro_rata)}</b></div></div>
+  ${bl.map(([k,b])=>`<div class="bar"><span>${names[k]||k}</span><div><i style="width:${b.tax/mx*100}%"></i></div><b>${inr(b.tax)}</b></div>`).join('')}
+  <div class="bar o"><span>This plan</span><div><i style="width:${d.tax/mx*100}%"></i></div><b>${inr(d.tax)}</b></div>
+  <p>${esc(d.explanation)}</p>
+  <div class="wrap"><table><tr><th>Scrip</th><th>Sell qty</th><th>Proceeds</th><th>Lots consumed (oldest first)</th></tr>
+  ${d.sells.map(s=>`<tr><td>${esc(s.symbol)}</td><td>${s.qty}</td><td>${inr(s.proceeds)}</td><td style="text-align:left">
+  ${s.lots.map(l=>`<div class="lot">${esc(l.buy_date)} · ${l.qty} sh · <span class="${cls(l.gain)}">${inr(l.gain)}</span> · ${l.term}-term</div>`).join('')}</td></tr>`).join('')}</table></div>
+  <p class="note">${d.tax_optimal?'Minimum tax proven optimal':'Best found within the time limit (not proven optimal)'} · solved in ${d.solve_seconds}s · ${esc(d.disclaimer)}</p>`;
+}
+</script>
+</body>
+</html>

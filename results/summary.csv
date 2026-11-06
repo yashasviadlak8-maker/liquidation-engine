@@ -1,0 +1,4 @@
+lots,instances,solver_s_mean,solver_s_max,optimal_pct,solver_mean_tax,greedy_mean_tax,pro_rata_mean_tax,largest_first_mean_tax,greedy_subopt_pct,pro_rata_subopt_pct,largest_first_subopt_pct,greedy_mean_excess,pro_rata_mean_excess,largest_first_mean_excess
+15,100,0.02,0.05,100.0,38761,52996,97313,112334,87.0,96.0,90.0,14235,58552,73573
+48,40,0.07,0.28,100.0,131693,189182,370315,447410,92.5,100.0,100.0,57490,238622,315717
+100,15,0.15,0.27,100.0,201237,297141,724802,837449,93.3,100.0,100.0,95905,523565,636212

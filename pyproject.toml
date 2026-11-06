@@ -1,0 +1,8 @@
+[project]
+name = "liquidation-engine"
+version = "0.1.0"
+description = "Tax-optimal withdrawal planner for Indian listed equity (FIFO-constrained)"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
