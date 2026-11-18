@@ -1,5 +1,5 @@
 """Exhaustive optimum for small instances. Ground truth for the exact solver.
-Objective is lexicographic: minimise tax, then minimise proceeds (sell as little as possible)."""
+Objective is lexicographic: minimise tax, then positions sold, then proceeds."""
 from dataclasses import dataclass
 from itertools import product
 from math import prod
@@ -13,6 +13,7 @@ class Solution:
     quantities: dict
     tax: int
     proceeds: int
+    positions_sold: int = 0
 
 
 def brute_force(positions, W, sale_date, profile, rules, max_states=2_000_000,
@@ -44,10 +45,10 @@ def brute_force(positions, W, sale_date, profile, rules, max_states=2_000_000,
         if max_positions is not None and sum(1 for i in combo if i > 0) > max_positions:
             continue
         tax, _ = incremental_tax(st, lt, profile, rules)
-        key = (tax, proceeds)
+        key = (tax, sum(1 for i in combo if i > 0), proceeds)
         if best is None or key < best[0]:
             best = (key, combo)
     if best is None:
         raise ValueError("infeasible: withdrawal exceeds portfolio value")
-    (tax, proceeds), combo = best
-    return Solution({p.key: x for p, x in zip(positions, combo)}, tax, proceeds)
+    (tax, npos, proceeds), combo = best
+    return Solution({p.key: x for p, x in zip(positions, combo)}, tax, proceeds, npos)

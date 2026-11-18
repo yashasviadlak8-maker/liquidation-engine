@@ -1,9 +1,8 @@
-__pycache__/
-.pytest_cache/
 *.pyc
+.env
+.pytest_cache/
 .venv/
+__pycache__/
 paper/*.aux
 paper/*.log
 paper/*.pdf
-.env
-.env

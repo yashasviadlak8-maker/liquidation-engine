@@ -4,7 +4,8 @@ Decision: y[p,j], shares sold from lot j of position p, constrained to FIFO orde
 (lot j+1 can only be used if lot j is fully consumed). Gains are linear in y.
 The tax function (set-off, brought-forward losses, exemption, rounding) is encoded
 with min/max equalities so it matches engine.tax.compute_tax exactly.
-Objective is lexicographic like brute force: minimise tax, then proceeds.
+Objective is lexicographic like brute force: minimise tax, then number of positions sold
+(fewer trades, fewer DP charges), then proceeds.
 """
 from dataclasses import dataclass
 from fractions import Fraction
@@ -25,6 +26,7 @@ class SolverResult:
     solve_seconds: float
     tax_optimal: bool = True    # stage 1 proved the minimum tax
     tax_seconds: float = 0.0    # stage 1 wall time
+    positions_sold: int = 0
 
 
 def solve(positions, W, sale_date, profile, rules, time_limit=30.0, workers=8,
@@ -57,12 +59,12 @@ def solve(positions, W, sale_date, profile, rules, time_limit=30.0, workers=8,
             (lt_terms if is_long_term(lot.buy_date, sale_date, rules.lt_holding_months) else st_terms).append(g * y)
             proc_terms.append(p.price * y)
             bound += abs(g) * lot.qty
+    flags = []
+    for p in positions:
+        f = m.NewBoolVar(f"sold_{p.account}_{p.symbol}")
+        m.Add(sum(pos_y[p.key]) <= p.total_qty * f)
+        flags.append(f)
     if max_positions is not None:
-        flags = []
-        for p in positions:
-            f = m.NewBoolVar(f"sold_{p.account}_{p.symbol}")
-            m.Add(sum(pos_y[p.key]) <= p.total_qty * f)
-            flags.append(f)
         m.Add(sum(flags) <= max_positions)
     B = (bound + abs(profile.ytd_st) + abs(profile.ytd_lt) + profile.bf_st_loss
          + profile.bf_lt_loss + rules.ltcg_exemption) * 2 + 1
@@ -127,23 +129,27 @@ def solve(positions, W, sale_date, profile, rules, time_limit=30.0, workers=8,
     tax_seconds, tax_optimal = wall, status == cp_model.OPTIMAL
     final_status = s.StatusName(status)
     vals = {k: s.Value(y) for k, y in ys.items()}
-    for k, y in ys.items():
-        m.AddHint(y, vals[k])
     m.Add(tax <= s.Value(tax))
-    m.Minimize(proceeds)
-    s.parameters.max_time_in_seconds = min(time_limit, 3.0)
-    status2 = s.Solve(m)
-    wall += s.WallTime()
-    if status2 == cp_model.OPTIMAL:
-        vals = {k: s.Value(y) for k, y in ys.items()}
-    elif status2 == cp_model.FEASIBLE:
-        vals = {k: s.Value(y) for k, y in ys.items()}
-        final_status = "FEASIBLE"
-    else:
-        final_status = "FEASIBLE"   # tax is optimal; the tie-break on proceeds was not completed
+    for expr in (sum(flags), proceeds):      # stage 2: fewest positions; stage 3: least proceeds
+        m.ClearHints()                      # duplicate hints make the model invalid
+        for k, y in ys.items():
+            m.AddHint(y, vals[k])
+        m.Minimize(expr)
+        s.parameters.max_time_in_seconds = min(time_limit, 3.0)
+        st = s.Solve(m)
+        wall += s.WallTime()
+        if st in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            vals = {k: s.Value(y) for k, y in ys.items()}
+            m.Add(expr <= int(round(s.ObjectiveValue())))
+            if st != cp_model.OPTIMAL:
+                final_status = "FEASIBLE"
+        else:
+            final_status = "FEASIBLE"
+            break
 
     q = {p.key: 0 for p in positions}
     for (key, _), v in vals.items():
         q[key] += v
     ev = evaluate_plan(positions, q, sale_date, profile, rules)
-    return SolverResult(q, ev.tax, ev.proceeds, final_status, wall, tax_optimal, tax_seconds)
+    return SolverResult(q, ev.tax, ev.proceeds, final_status, wall, tax_optimal, tax_seconds,
+                        sum(1 for v in q.values() if v > 0))

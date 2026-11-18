@@ -63,3 +63,23 @@ def greedy_tax_aware(positions, W, sale_date, profile, rules, chunk_value=500_00
         x[p.key] += u
         proceeds += u * p.price
     return x
+
+
+def losers_first(positions, W):
+    """Practitioner rule: sell the most under-water positions first (lowest unrealised gain %),
+    whole positions until the target is met. FIFO applies inside each position."""
+    _check(positions, W)
+
+    def pnl(p):
+        cost = sum(l.unit_cost * l.qty for l in p.lots)
+        return Fraction(p.price * p.total_qty - cost, cost) if cost else Fraction(0)
+
+    x = {p.key: 0 for p in positions}
+    proceeds = 0
+    for p in sorted(positions, key=lambda q: (pnl(q), q.key)):
+        if proceeds >= W:
+            break
+        take = min(p.total_qty, -(-(W - proceeds) // p.price))
+        x[p.key] = take
+        proceeds += take * p.price
+    return x

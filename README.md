@@ -7,13 +7,14 @@ Lot choice is not a decision variable: the decision is how many shares to sell p
 
 ## Run
     pip install -r requirements.txt
-    python -m pytest -q                       # 196 tests
+    python -m pytest -q                       # 205 tests
     uvicorn api.main:app --reload             # open http://localhost:8000
     # or: docker build -t planner . && docker run -p 8000:8000 planner
 Optional: set `ANTHROPIC_API_KEY` (see `.env.example`) to enable LLM request parsing and explanations.
 
 ## Layout
 - `engine/`  pure Python, no I/O, no AI. Integer paise. `tax.py` `fifo.py` `plan.py` `baselines.py` `bruteforce.py` `solver.py` `instances.py`
+- `calendars/` NSE holidays and special sessions (JSON, refresh yearly; 2026 unverified). `engine/calendar.py` rolls a non-trading sale date forward and warns.
 - `rules/`   versioned tax parameters (JSON). `docs/rules_spec.md` has verification status of every rule.
 - `ingest/`  deterministic tradebook CSV -> FIFO lots -> positions (+ holdings reconciliation)
 - `ai/`      `intent.py` (text -> constraints, echo-back), `explain.py` (numbers verified against the plan),
@@ -29,11 +30,11 @@ known symbols, echo-back confirmation) and every feature has a non-AI fallback. 
 `rules/proposed_*.json`; a human reviews it and the tests must pass before it becomes a live rules file.
 
 ## Reproduce results
-    python experiments/evaluate.py run 0 240; python experiments/evaluate.py run 1 240; python experiments/evaluate.py run 2 240
+    python experiments/evaluate.py run 0 240; python experiments/evaluate.py run 1 240; python experiments/evaluate.py run 2 240   # run each separately
     python experiments/evaluate.py summary    # writes results/summary.csv and paper/results_table.tex
     ANTHROPIC_API_KEY=... python experiments/llm_vs_solver.py   # not yet run
 
 ## Known limits (v1)
-Listed equity, one financial year, no surcharge, brokerage or STT, no splits/bonuses in ingestion, prices supplied by the user.
+The exchange-holiday calendar covers 2026 only. Listed equity, one financial year, no surcharge, brokerage or STT, no splits/bonuses in ingestion, prices supplied by the user.
 Tradebook column names are assumed Zerodha-style; test with real exports. Three tax rules still need primary-source verification (docs/rules_spec.md).
 This is a planning aid, not tax or investment advice.

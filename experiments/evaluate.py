@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from engine.baselines import greedy_tax_aware, largest_first, pro_rata
+from engine.baselines import greedy_tax_aware, largest_first, losers_first, pro_rata
 from engine.instances import generate_hard_portfolio, generate_profile
 from engine.plan import evaluate_plan
 from engine.rules import load_rules
@@ -18,7 +18,7 @@ from engine.solver import solve
 rules = load_rules(ROOT / "rules" / "fy2026_27.json")
 SALE = date(2026, 11, 5)
 SIZES = [(5, 3, 100), (12, 4, 40), (25, 4, 15)]      # (positions, lots/position, instances)
-METHODS = ["solver", "greedy", "pro_rata", "largest_first"]
+METHODS = ["solver", "greedy", "losers_first", "pro_rata", "largest_first"]
 out = ROOT / "results" / "hard_instances.csv"
 
 
@@ -47,7 +47,7 @@ def run(idx, budget):
             ev = lambda x: evaluate_plan(pos, x, SALE, prof, rules).tax
             g = ev(greedy_tax_aware(pos, W, SALE, prof, rules, chunk_value=max(500_000, W // 50)))
             w.writerow([n, n * lp, seed, round(pct, 3), int(r.tax_optimal), round(r.tax_seconds, 3), r.tax, g,
-                        ev(pro_rata(pos, W)), ev(largest_first(pos, W))])
+                        ev(losers_first(pos, W)), ev(pro_rata(pos, W)), ev(largest_first(pos, W))])
             f.flush()
     print(f"size {n}x{lp}: {seed - start + (0 if time.time() - t_start > budget else 1)} instances this call", flush=True)
 
@@ -71,11 +71,12 @@ def summary():
     with open(ROOT / "results" / "summary.csv", "w", newline="") as f:
         csv.writer(f).writerows(summ)
     ix = {h: i for i, h in enumerate(summ[0])}
-    tex = ["\\begin{tabular}{rrrrrrr}", "\\hline",
-           "Lots & Inst. & Solver (s) & Greedy subopt.\\% & Greedy excess (Rs) & Pro-rata excess (Rs) & Largest-first excess (Rs) \\\\", "\\hline"]
+    cols = [("greedy", "Greedy"), ("losers_first", "Losers-first"), ("pro_rata", "Pro-rata"), ("largest_first", "Largest-first")]
+    tex = ["\\begin{tabular}{rrr" + "r" * len(cols) + "}", "\\hline",
+           "Lots & Inst. & Solver (s) & " + " & ".join(n for _, n in cols) + " \\\\", "\\hline"]
     for r in summ[1:]:
-        tex.append(f"{r[ix['lots']]} & {r[ix['instances']]} & {r[ix['solver_s_mean']]} & {r[ix['greedy_subopt_pct']]} & "
-                   f"{r[ix['greedy_mean_excess']]:,} & {r[ix['pro_rata_mean_excess']]:,} & {r[ix['largest_first_mean_excess']]:,} \\\\")
+        cells = [f"{r[ix[m + '_subopt_pct']]}\\% / {r[ix[m + '_mean_excess']]:,}" for m, _ in cols]
+        tex.append(f"{r[ix['lots']]} & {r[ix['instances']]} & {r[ix['solver_s_mean']]} & " + " & ".join(cells) + " \\\\")
     tex += ["\\hline", "\\end{tabular}"]
     (ROOT / "paper" / "results_table.tex").write_text("\n".join(tex) + "\n")
     for r in summ:

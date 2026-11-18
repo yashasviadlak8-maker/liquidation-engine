@@ -18,5 +18,5 @@ Keep one script per table/figure under `experiments/`.
 
 ## Status
 Done and reproducible: formulation, solver, brute-force validation, hard-instance evaluation (results/summary.csv).
-Not done: LLM comparison (script ready, needs API key), real-portfolio case study, stronger practitioner baseline,
+Not done: LLM comparison (script ready, needs API key), real-portfolio case study, more practitioner baselines,
 introduction/abstract, related work, primary-source verification of the three flagged rules.

@@ -60,7 +60,7 @@ td input{width:110px;padding:3px 6px}.lot{color:var(--mute);font-size:12.5px}
 <div id="confirm"></div>
 <div class="row" style="margin-top:10px">
 <label>Cash needed (₹)<input id="amt" type="number" value="250000" min="0"></label>
-<label>Sale date<input id="date" type="date" value="2026-11-05"></label>
+<label>Sale date<input id="date" type="date"></label>
 <label>Max positions sold<input id="maxp" type="number" min="1" placeholder="any"></label></div>
 <details style="margin-top:10px"><summary>This year so far (₹)</summary><div class="row" style="margin-top:8px">
 <label>Short-term gain realised<input id="yst" type="number" value="0"></label>
@@ -72,11 +72,12 @@ td input{width:110px;padding:3px 6px}.lot{color:var(--mute);font-size:12.5px}
 </section>
 
 <section class="card" id="res" hidden>
-<h2>3. Plan</h2><div id="out"></div>
+<h2>3. Plan</h2><div id="warn"></div><div id="out"></div>
 </section>
 </main>
 <script>
 const $=id=>document.getElementById(id);
+window.addEventListener('DOMContentLoaded',()=>{$('date').value=new Date().toISOString().slice(0,10)});
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const inr=x=>(x<0?'−':'')+'₹'+Math.abs(Math.round(x)).toLocaleString('en-IN');
 const cls=x=>x<0?'neg':x>0?'pos':'';
@@ -115,8 +116,9 @@ $('go').onclick=async()=>{
 };
 function show(d){
   $('res').hidden=false;
+  msg('warn',[...d.calendar_warnings,`Plan uses sale date ${d.sale_date_used}.`]);
   const bl=Object.entries(d.baselines),mx=Math.max(d.tax,...bl.map(([,b])=>b.tax),1);
-  const names={pro_rata:'Pro-rata',largest_first:'Largest first',greedy:'Greedy heuristic'};
+  const names={pro_rata:'Pro-rata',largest_first:'Largest first',losers_first:'Losers first',greedy:'Greedy heuristic'};
   $('out').innerHTML=`<div class="stats"><div class="stat"><span>Cash raised</span><b>${inr(d.proceeds)}</b></div>
   <div class="stat"><span>Tax on this sale</span><b>${inr(d.tax)}</b></div>
   <div class="stat"><span>Saved vs pro-rata</span><b>${inr(d.savings_vs_pro_rata)}</b></div></div>

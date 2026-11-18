@@ -12,7 +12,8 @@ from ai.explain import explain
 from ai.intent import parse_request
 from ai.llm import get_client
 from api.sample import sample_positions
-from engine.baselines import greedy_tax_aware, largest_first, pro_rata
+from engine.baselines import greedy_tax_aware, largest_first, losers_first, pro_rata
+from engine.calendar import TradingCalendar
 from engine.models import Lot, Position
 from engine.plan import evaluate_plan
 from engine.rules import load_rules
@@ -22,6 +23,7 @@ from ingest.tradebook import build_positions, parse_tradebook, to_paise
 
 ROOT = Path(__file__).resolve().parent.parent
 RULES = load_rules(ROOT / "rules" / "fy2026_27.json")
+CAL = TradingCalendar.load(ROOT / "calendars")
 app = FastAPI(title="Withdrawal planner")
 
 
@@ -108,6 +110,7 @@ def parse_req(req: ParseRequestIn):
 
 @app.post("/api/plan")
 def plan(req: PlanRequest):
+    sale_date, cal_warnings = CAL.resolve(req.sale_date)
     positions = to_positions(req.positions)
     keys = {p.key for p in positions}
     excl = frozenset(k for k in keys if k[1] in {e.upper() for e in req.exclude} or k[1] in req.exclude)
@@ -118,18 +121,18 @@ def plan(req: PlanRequest):
     if W > sum(p.price * p.total_qty for p in avail):
         raise HTTPException(422, "Amount exceeds the value of the holdings you allowed to be sold.")
     try:
-        r = solve(positions, W, req.sale_date, prof, RULES, time_limit=20, excluded=excl, max_positions=req.max_positions)
+        r = solve(positions, W, sale_date, prof, RULES, time_limit=20, excluded=excl, max_positions=req.max_positions)
     except RuntimeError:
         raise HTTPException(422, "No feasible plan under these constraints (try allowing more positions or a smaller amount).")
-    ev = evaluate_plan(positions, r.quantities, req.sale_date, prof, RULES)
+    ev = evaluate_plan(positions, r.quantities, sale_date, prof, RULES)
     after = compute_tax(prof.ytd_st + ev.st_gain, prof.ytd_lt + ev.lt_gain, RULES, prof.bf_st_loss, prof.bf_lt_loss)
 
-    base = {"pro_rata": pro_rata(avail, W), "largest_first": largest_first(avail, W)}
+    base = {"pro_rata": pro_rata(avail, W), "largest_first": largest_first(avail, W), "losers_first": losers_first(avail, W)}
     if sum(len(p.lots) for p in avail) <= 60:
-        base["greedy"] = greedy_tax_aware(avail, W, req.sale_date, prof, RULES, chunk_value=max(500_000, W // 50))
+        base["greedy"] = greedy_tax_aware(avail, W, sale_date, prof, RULES, chunk_value=max(500_000, W // 50))
     baselines = {}
     for name, x in base.items():
-        b = evaluate_plan(avail, x, req.sale_date, prof, RULES)
+        b = evaluate_plan(avail, x, sale_date, prof, RULES)
         baselines[name] = {"tax": rup(b.tax), "proceeds": rup(b.proceeds)}
 
     sells = []
@@ -144,7 +147,8 @@ def plan(req: PlanRequest):
     out = {"status": r.status, "tax_optimal": r.tax_optimal, "solve_seconds": round(r.solve_seconds, 2),
            "proceeds": rup(ev.proceeds), "tax": rup(ev.tax), "st_gain": rup(ev.st_gain), "lt_gain": rup(ev.lt_gain),
            "exemption_used": rup(after.exemption_used), "sells": sells, "baselines": baselines,
-           "savings_vs_pro_rata": rup(baselines["pro_rata"]["tax"] * 100 - ev.tax)}
+           "savings_vs_pro_rata": rup(baselines["pro_rata"]["tax"] * 100 - ev.tax),
+           "sale_date_used": sale_date.isoformat(), "calendar_warnings": cal_warnings, "positions_sold": r.positions_sold}
     out["explanation"], out["explanation_source"] = explain(out, get_client())
     out["disclaimer"] = ("Planning aid showing the tax effect of choices under the modelled rules (listed equity, one FY, "
                          "no surcharge or charges). Not tax or investment advice.")

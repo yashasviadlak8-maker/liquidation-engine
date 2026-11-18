@@ -12,7 +12,7 @@ CONSTANT_FLOATS = {12.5}
 
 
 def inr(x) -> str:
-    return "₹" + f"{round(x):,}"
+    return ("−" if round(x) < 0 else "") + "₹" + f"{abs(round(x)):,}"
 
 
 def facts_from_plan(plan: dict) -> dict:

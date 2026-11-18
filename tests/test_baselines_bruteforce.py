@@ -1,7 +1,7 @@
 import random
 from datetime import date
 import pytest
-from engine.baselines import pro_rata, largest_first, greedy_tax_aware
+from engine.baselines import pro_rata, largest_first, greedy_tax_aware, losers_first
 from engine.bruteforce import brute_force
 from engine.instances import generate_portfolio
 from engine.models import Lot, Position
@@ -42,7 +42,7 @@ def test_baselines_feasible_and_never_beat_optimum(rules, seed):
     W = int(total * random.Random(seed).uniform(0.15, 0.6))
     opt = brute_force(pos, W, SALE, P0, rules)
     plans = {"pro_rata": pro_rata(pos, W), "largest": largest_first(pos, W),
-             "greedy": greedy_tax_aware(pos, W, SALE, P0, rules)}
+             "greedy": greedy_tax_aware(pos, W, SALE, P0, rules), "losers": losers_first(pos, W)}
     # the optimum's reported tax must match an independent end-to-end evaluation
     assert evaluate_plan(pos, opt.quantities, SALE, P0, rules).tax == opt.tax
     for name, x in plans.items():

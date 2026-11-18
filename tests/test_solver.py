@@ -35,7 +35,7 @@ def test_matches_brute_force(rules, seed):
     bf = brute_force(pos, W, SALE, prof, rules)
     r = solve(pos, W, SALE, prof, rules)
     assert r.status == "OPTIMAL"
-    assert (r.tax, r.proceeds) == (bf.tax, bf.proceeds)
+    assert (r.tax, r.positions_sold, r.proceeds) == (bf.tax, bf.positions_sold, bf.proceeds)
     assert evaluate_plan(pos, r.quantities, SALE, prof, rules).tax == r.tax
 
 
@@ -71,6 +71,6 @@ def test_constraints_match_brute_force(rules, seed):
             solve(pos, W, SALE, prof, rules, excluded=excluded, max_positions=k)
         return
     r = solve(pos, W, SALE, prof, rules, excluded=excluded, max_positions=k)
-    assert (r.tax, r.proceeds) == (bf.tax, bf.proceeds)
+    assert (r.tax, r.positions_sold, r.proceeds) == (bf.tax, bf.positions_sold, bf.proceeds)
     assert all(r.quantities[e] == 0 for e in excluded)
     assert k is None or sum(1 for v in r.quantities.values() if v > 0) <= k
